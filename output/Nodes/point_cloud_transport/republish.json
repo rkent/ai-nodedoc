@@ -1,0 +1,36 @@
+{
+  "donotmodify": false,
+  "name": "republish",
+  "summary": "Republishes point clouds between different transport encodings.",
+  "overview": "The republish node subscribes to a point cloud topic using a configurable input transport and republishes PointCloud2 data via a specified output transport or all available transports. It enables on-the-fly conversion between encodings such as raw, draco, or zlib.",
+  "repo": "https://github.com/ros-perception/point_cloud_transport",
+  "package": "point_cloud_transport",
+  "parameters": [
+    {
+      "name": "in_transport",
+      "type": "string",
+      "default": "raw",
+      "summary": "Transport type used when subscribing to the input point cloud topic."
+    },
+    {
+      "name": "out_transport",
+      "type": "string",
+      "default": "",
+      "summary": "Transport type for output; if empty, all available transports are used."
+    }
+  ],
+  "interfaces": [
+    {
+      "itype": "subscriber",
+      "topic": "in",
+      "mtype": "sensor_msgs/msg/PointCloud2",
+      "summary": "Incoming point cloud stream using the specified input transport."
+    },
+    {
+      "itype": "publisher",
+      "topic": "out",
+      "mtype": "sensor_msgs/msg/PointCloud2",
+      "summary": "Republished point cloud stream using the specified output transport(s)."
+    }
+  ]
+}

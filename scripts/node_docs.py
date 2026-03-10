@@ -37,10 +37,11 @@ from pathlib import Path
 # Paths relative to this script
 # ---------------------------------------------------------------------------
 _SCRIPT_DIR = Path(__file__).parent.resolve()
-_FIND_SCRIPT = _SCRIPT_DIR / "scripts" / "find_file_nodes.py"
-_BATCH_SCRIPT = _SCRIPT_DIR / "scripts" / "create_node_batches.py"
-_PROMPT_FILE = _SCRIPT_DIR / ".github" / "prompts" / "document-node-batch.prompt.md"
-_SCHEMA_FILE = _SCRIPT_DIR / "ai-instructions" / "node-doc.schema.json"
+_CWD = Path().resolve()
+_FIND_SCRIPT = _SCRIPT_DIR / "find_file_nodes.py"
+_BATCH_SCRIPT = _SCRIPT_DIR / "create_node_batches.py"
+_PROMPT_FILE = _CWD / "instructions" / "document-node-batch.prompt.md"
+_SCHEMA_FILE = _CWD / "instructions" / "node-doc.schema.json"
 
 
 # ---------------------------------------------------------------------------
@@ -212,30 +213,19 @@ def _run_batch(
     total_batches: int,
 ) -> str:
     """Run the LangChain documentation agent on one batch file."""
-    from langchain.agents import AgentExecutor, create_tool_calling_agent
-    from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+    from langchain.agents import create_agent
 
     with open(batch_file, "r", encoding="utf-8") as fh:
         batch_data = fh.read()
 
     tools = _make_tools(working_dir)
 
-    prompt = ChatPromptTemplate.from_messages([
-        (
-            "system",
-            prompt_text + "\n\nWorking directory (write Nodes/ here): {working_dir}",
-        ),
-        ("human", "{input}"),
-        MessagesPlaceholder("agent_scratchpad"),
-    ])
+    system_prompt = prompt_text + f"\n\nWorking directory (write Nodes/ here): {working_dir}"
 
-    agent = create_tool_calling_agent(llm, tools, prompt)
-    executor = AgentExecutor(
-        agent=agent,
+    agent = create_agent(
+        model=llm,
         tools=tools,
-        verbose=True,
-        max_iterations=200,
-        handle_parsing_errors=True,
+        system_prompt=system_prompt,
     )
 
     human_input = (
@@ -244,11 +234,11 @@ def _run_batch(
         f"```json\n{batch_data}\n```"
     )
 
-    result = executor.invoke({
-        "input": human_input,
-        "working_dir": working_dir,
-    })
-    return result.get("output", "")
+    result = agent.invoke(
+        {"messages": [("human", human_input)]},
+        config={"recursion_limit": 400},
+    )
+    return result["messages"][-1].content
 
 
 def _run_subprocess(script: Path, args: list[str]) -> int:

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rkent/ai-rosdoc/ai-instructions/node-doc.schema.json",
+  "title": "ROS 2 Node Documentation",
+  "type": "object",
+  "required": ["donotmodify", "name", "summary", "overview", "repo", "package", "parameters", "interfaces"],
+  "additionalProperties": false,
+  "properties": {
+    "donotmodify": { "type": "boolean" },
+    "name":        { "type": "string" },
+    "summary":     { "type": "string", "minLength": 30, "maxLength": 100 },
+    "overview":    { "type": "string", "minLength": 110, "maxLength": 300 },
+    "repo":        { "type": "string" },
+    "package":     { "type": "string" },
+    "parameters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type", "default", "summary"],
+        "additionalProperties": false,
+        "properties": {
+          "name":    { "type": "string" },
+          "type":    { "type": "string" },
+          "default": { "type": "string" },
+          "summary": { "type": "string", "minLength": 30, "maxLength": 100 }
+        }
+      }
+    },
+    "interfaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["itype", "topic", "mtype", "summary"],
+        "additionalProperties": false,
+        "properties": {
+          "itype": {
+            "type": "string",
+            "enum": ["publisher", "subscriber", "service", "client", "action server", "action client"]
+          },
+          "topic":   { "type": "string" },
+          "mtype":   { "type": "string" },
+          "summary": { "type": "string", "minLength": 30, "maxLength": 100 }
+        }
+      }
+    }
+  }
+}

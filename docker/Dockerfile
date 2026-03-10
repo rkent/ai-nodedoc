@@ -1,5 +1,14 @@
 FROM ubuntu:24.04
 
+ARG USERNAME=ros
+ARG UID=1000
+ARG GID=1000
+
+RUN userdel -r ubuntu || true
+RUN groupadd --gid ${GID} $USERNAME && useradd -s /bin/bash --uid ${UID} --gid ${GID} -m ${USERNAME} \
+&& usermod -aG sudo ${USERNAME} \
+&& passwd -d ${USERNAME} || true
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install Python 3 and essential tools
@@ -24,7 +33,7 @@ WORKDIR /app
 COPY . .
 
 # Make the main script executable
-RUN chmod +x node_docs.py
+RUN chmod +x scripts/node_docs.py
 
 # Default: show help.
 # To generate docs, override with:
@@ -33,5 +42,5 @@ RUN chmod +x node_docs.py
 #     -v /path/to/ros_ws:/ros_ws:ro \
 #     -v /path/to/output:/output \
 #     <image> /ros_ws --output-dir /output
-ENTRYPOINT ["python3", "node_docs.py"]
+ENTRYPOINT ["python3", "scripts/node_docs.py"]
 CMD ["--help"]

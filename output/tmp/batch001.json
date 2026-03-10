@@ -1,0 +1,16 @@
+[
+  {
+    "package": "point_cloud_transport",
+    "package_dir": "/ros_ws/point_cloud_transport",
+    "node_files": [
+      "src/republish.cpp"
+    ]
+  },
+  {
+    "package": "point_cloud_transport_py",
+    "package_dir": "/ros_ws/point_cloud_transport_py",
+    "node_files": [
+      "src/point_cloud_transport_py/pybind_point_cloud_transport.cpp"
+    ]
+  }
+]
