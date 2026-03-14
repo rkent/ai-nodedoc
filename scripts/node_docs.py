@@ -25,6 +25,7 @@ Options:
 Environment variables:
     ANTHROPIC_API_KEY    Required when --provider anthropic (default)
     OPENAI_API_KEY       Required when --provider openai
+    OPENROUTER_API_KEY   Required when --provider openrouter
 """
 
 import argparse
@@ -98,6 +99,7 @@ def _load_prompt() -> str:
 
 def _get_llm(provider: str, model: str | None):
     """Instantiate and return the requested LangChain chat model."""
+    print(f"Initializing LLM provider: {provider}" + (f" with model {model}" if model else ""))
     if provider == "anthropic":
         try:
             from langchain_anthropic import ChatAnthropic
@@ -120,7 +122,22 @@ def _get_llm(provider: str, model: str | None):
             kwargs["model"] = "gpt-4o"
         return ChatOpenAI(**kwargs)
 
-    sys.exit(f"Unknown provider: {provider!r}. Choose 'anthropic' or 'openai'.")
+    if provider == "openrouter":
+        try:
+            from langchain_openai import ChatOpenAI
+        except ImportError:
+            sys.exit("langchain-openai is not installed. Run: pip install langchain-openai")
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            sys.exit("OPENROUTER_API_KEY environment variable is not set.")
+        kwargs = {
+            "openai_api_base": "https://openrouter.ai/api/v1",
+            "openai_api_key": api_key,
+            "model": model or "anthropic/claude-3.5-sonnet",
+        }
+        return ChatOpenAI(**kwargs)
+
+    sys.exit(f"Unknown provider: {provider!r}. Choose 'anthropic', 'openai', or 'openrouter'.")
 
 
 def _make_tools(working_dir: str):
@@ -134,6 +151,7 @@ def _make_tools(working_dir: str):
         Args:
             path: Absolute path, or path relative to the working directory.
         """
+        print(f"Reading file: {path}")
         p = Path(path) if Path(path).is_absolute() else Path(working_dir) / path
         try:
             return p.read_text(encoding="utf-8", errors="replace")
@@ -149,6 +167,7 @@ def _make_tools(working_dir: str):
             content: The text to write.
         """
         p = Path(path) if Path(path).is_absolute() else Path(working_dir) / path
+        print(f"Writing file: {p}")
         try:
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(content, encoding="utf-8")
@@ -165,6 +184,7 @@ def _make_tools(working_dir: str):
         Args:
             command: The shell command string to execute.
         """
+        print(f"Running shell command: {command}")
         try:
             result = subprocess.run(
                 command,
@@ -288,7 +308,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--provider",
         default="anthropic",
-        choices=["anthropic", "openai"],
+        choices=["anthropic", "openai", "openrouter"],
         help="LLM provider (default: anthropic)",
     )
     parser.add_argument(
@@ -297,7 +317,7 @@ def _parse_args() -> argparse.Namespace:
         metavar="MODEL",
         help=(
             "Model name override. Defaults: claude-3-5-sonnet (anthropic), "
-            "gpt-4o (openai)"
+            "gpt-4o (openai), anthropic/claude-3.5-sonnet (openrouter)"
         ),
     )
     parser.add_argument(
@@ -361,6 +381,8 @@ def main() -> None:
     print(f"output_dir     : {output_dir}")
     print(f"batch_dir      : {batch_dir}")
     print(f"LLM provider   : {args.provider}" + (f"  model: {args.model}" if args.model else ""))
+    if args.provider == "openrouter" and not os.environ.get("OPENROUTER_API_KEY"):
+        sys.exit("Error: OPENROUTER_API_KEY environment variable is not set.")
 
     # -----------------------------------------------------------------------
     # Step 1: find_file_nodes.py
