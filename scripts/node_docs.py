@@ -24,6 +24,9 @@ Options:
 Environment variables:
     ANTHROPIC_API_KEY    Required for Anthropic models
     OPENAI_API_KEY       Required for OpenAI models
+    LANGFUSE_PUBLIC_KEY  Enable Langfuse tracing (optional)
+    LANGFUSE_SECRET_KEY  Enable Langfuse tracing (optional)
+    LANGFUSE_HOST        Langfuse server URL (optional, default: cloud)
 """
 
 import argparse
@@ -50,6 +53,24 @@ _SCHEMA_FILE = _CWD / "instructions" / "node-doc.schema.json"
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _init_langfuse():
+    """Return a Langfuse client if credentials are available, otherwise None."""
+    if not (os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY")):
+        return None
+    try:
+        from langfuse import Langfuse  # noqa: PLC0415
+        from langfuse.langchain import CallbackHandler  # noqa: PLC0415, F401
+        lf = Langfuse()
+        print("Langfuse tracing enabled.")
+        return lf
+    except ImportError:
+        print(
+            "Warning: langfuse not installed; tracing disabled. "
+            "Run: pip install langfuse"
+        )
+        return None
+
 
 def _check_imports() -> None:
     """Exit early with a helpful message if LangChain is not installed."""
@@ -201,6 +222,7 @@ def _run_batch(
     working_dir: str,
     batch_index: int,
     total_batches: int,
+    lf_handler=None,
 ) -> str:
     """Run the LangChain documentation agent on one batch file."""
     from langchain.agents import create_agent
@@ -224,9 +246,13 @@ def _run_batch(
         f"```json\n{batch_data}\n```"
     )
 
+    invoke_config = {"recursion_limit": 400}
+    if lf_handler is not None:
+        invoke_config["callbacks"] = [lf_handler]
+
     result = agent.invoke(
         {"messages": [("human", human_input)]},
-        config={"recursion_limit": 400},
+        config=invoke_config,
     )
     return result["messages"][-1].content
 
@@ -338,6 +364,8 @@ def main() -> None:
 
     nodes_json = os.path.join(output_dir, "nodes_index.json")
 
+    langfuse = _init_langfuse()
+
     print(f"root_directory : {root_dir}")
     print(f"output_dir     : {output_dir}")
     print(f"batch_dir      : {batch_dir}")
@@ -397,6 +425,24 @@ def main() -> None:
             continue
 
         print(f"\n--- Batch {i}/{len(batch_files)}: {os.path.basename(batch_file)} ---")
+        lf_span = None
+        lf_handler = None
+        if langfuse is not None:
+            from langfuse.langchain import CallbackHandler as LangfuseCallbackHandler  # noqa: PLC0415
+            trace_id = langfuse.create_trace_id()
+            lf_span = langfuse.start_observation(
+                name="node-doc-batch",
+                as_type="span",
+                metadata={
+                    "batch": i,
+                    "total": len(batch_files),
+                    "file": os.path.basename(batch_file),
+                    "model": args.model,
+                    "root_dir": root_dir,
+                },
+                trace_context={"trace_id": trace_id},
+            )
+            lf_handler = LangfuseCallbackHandler(trace_context={"trace_id": trace_id})
         try:
             output = _run_batch(
                 batch_file,
@@ -405,12 +451,22 @@ def main() -> None:
                 output_dir,
                 batch_index=i,
                 total_batches=len(batch_files),
+                lf_handler=lf_handler,
             )
             print(f"Agent result: {output}")
+            if lf_span is not None:
+                lf_span.update(output=output)
+                lf_span.end()
         except Exception as exc:
             msg = f"Batch {i} ({os.path.basename(batch_file)}) failed: {exc}"
             print(f"ERROR: {msg}", file=sys.stderr)
+            if lf_span is not None:
+                lf_span.update(output=str(exc))
+                lf_span.end()
             errors.append(msg)
+
+    if langfuse is not None:
+        langfuse.flush()
 
     print("\n=== Documentation generation complete ===")
     if errors:

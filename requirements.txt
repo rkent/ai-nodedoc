@@ -11,3 +11,6 @@ langchain-openrouter>=0.1.0
 check-jsonschema>=0.28.0
 
 python-dotenv
+
+# Observability / tracing (optional – set LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY)
+langfuse>=2.0.0
