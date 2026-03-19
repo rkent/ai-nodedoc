@@ -14,8 +14,7 @@ Options:
     --output-dir DIR     Directory under which Nodes/ is written (default: CWD)
     --batch-dir DIR      Directory for intermediate batch JSON files
                          (default: <output-dir>/tmp)
-    --provider PROV      LLM provider: anthropic (default) or openai
-    --model MODEL        Model name (default: provider's default)
+    --model MODEL        Model name (default: openrouter:minimax/minimax-m2.5)
     --max-packages N     Stop scanning after N packages with nodes
     --max-per-batch N    Max node files per batch (default: 20)
     --batch N            Only process batch number N (1-based); skip others
@@ -23,16 +22,19 @@ Options:
     --skip-batch         Skip batch creation; reuse existing batch files
 
 Environment variables:
-    ANTHROPIC_API_KEY    Required when --provider anthropic (default)
-    OPENAI_API_KEY       Required when --provider openai
-    OPENROUTER_API_KEY   Required when --provider openrouter
+    ANTHROPIC_API_KEY    Required for Anthropic models
+    OPENAI_API_KEY       Required for OpenAI models
 """
 
 import argparse
+from dotenv import load_dotenv
 import os
 import subprocess
 import sys
 from pathlib import Path
+
+# Load environment variables from .env file
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # Paths relative to this script
@@ -97,47 +99,15 @@ def _load_prompt() -> str:
     return text
 
 
-def _get_llm(provider: str, model: str | None):
+def _get_llm(model: str):
     """Instantiate and return the requested LangChain chat model."""
-    print(f"Initializing LLM provider: {provider}" + (f" with model {model}" if model else ""))
-    if provider == "anthropic":
-        try:
-            from langchain_anthropic import ChatAnthropic
-        except ImportError:
-            sys.exit("langchain-anthropic is not installed. Run: pip install langchain-anthropic")
-        kwargs = {"max_tokens": 8192}
-        if model:
-            kwargs["model"] = model
-        return ChatAnthropic(**kwargs)
+    try:
+        from langchain.chat_models import init_chat_model
+    except ImportError:
+        sys.exit("langchain is not installed. Run: pip install langchain")
 
-    if provider == "openai":
-        try:
-            from langchain_openai import ChatOpenAI
-        except ImportError:
-            sys.exit("langchain-openai is not installed. Run: pip install langchain-openai")
-        kwargs = {}
-        if model:
-            kwargs["model"] = model
-        else:
-            kwargs["model"] = "gpt-4o"
-        return ChatOpenAI(**kwargs)
-
-    if provider == "openrouter":
-        try:
-            from langchain_openai import ChatOpenAI
-        except ImportError:
-            sys.exit("langchain-openai is not installed. Run: pip install langchain-openai")
-        api_key = os.environ.get("OPENROUTER_API_KEY")
-        if not api_key:
-            sys.exit("OPENROUTER_API_KEY environment variable is not set.")
-        kwargs = {
-            "openai_api_base": "https://openrouter.ai/api/v1",
-            "openai_api_key": api_key,
-            "model": model or "anthropic/claude-3.5-sonnet",
-        }
-        return ChatOpenAI(**kwargs)
-
-    sys.exit(f"Unknown provider: {provider!r}. Choose 'anthropic', 'openai', or 'openrouter'.")
+    print(f"Initializing model: {model}")
+    return init_chat_model(model)
 
 
 def _make_tools(working_dir: str):
@@ -306,19 +276,10 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--provider",
-        default="anthropic",
-        choices=["anthropic", "openai", "openrouter"],
-        help="LLM provider (default: anthropic)",
-    )
-    parser.add_argument(
         "--model",
-        default=None,
+        default="openrouter:minimax/minimax-m2.5",
         metavar="MODEL",
-        help=(
-            "Model name override. Defaults: claude-3-5-sonnet (anthropic), "
-            "gpt-4o (openai), anthropic/claude-3.5-sonnet (openrouter)"
-        ),
+        help="Model name (default: openrouter:minimax/minimax-m2.5)",
     )
     parser.add_argument(
         "--max-packages",
@@ -380,9 +341,7 @@ def main() -> None:
     print(f"root_directory : {root_dir}")
     print(f"output_dir     : {output_dir}")
     print(f"batch_dir      : {batch_dir}")
-    print(f"LLM provider   : {args.provider}" + (f"  model: {args.model}" if args.model else ""))
-    if args.provider == "openrouter" and not os.environ.get("OPENROUTER_API_KEY"):
-        sys.exit("Error: OPENROUTER_API_KEY environment variable is not set.")
+    print(f"model          : {args.model}")
 
     # -----------------------------------------------------------------------
     # Step 1: find_file_nodes.py
@@ -430,7 +389,7 @@ def main() -> None:
     # -----------------------------------------------------------------------
     print("\n=== Step 3: Running LLM agent to generate documentation ===")
     prompt_text = _load_prompt()
-    llm = _get_llm(args.provider, args.model)
+    llm = _get_llm(args.model)
 
     errors: list[str] = []
     for i, batch_file in enumerate(batch_files, start=1):

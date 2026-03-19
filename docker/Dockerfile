@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV VENV=/opt/venv
 RUN python3 -m venv $VENV
 ENV PATH="$VENV/bin:$PATH"
+ENV PYTHONUNBUFFERED=1
 
 # Install Python dependencies
 COPY requirements.txt /tmp/requirements.txt
@@ -34,6 +35,8 @@ COPY . .
 
 # Make the main script executable
 RUN chmod +x scripts/node_docs.py
+
+USER $USERNAME
 
 # Default: show help.
 # To generate docs, override with:
