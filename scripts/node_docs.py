@@ -32,9 +32,13 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+import uuid
 
 # Load environment variables from .env file
 load_dotenv()
+
+session_id = str(uuid.uuid4())
+
 
 # ---------------------------------------------------------------------------
 # Paths relative to this script
@@ -233,6 +237,7 @@ def _run_package(
     invoke_config = {"recursion_limit": 400}
     if lf_handler is not None:
         invoke_config["callbacks"] = [lf_handler]
+        invoke_config["metadata"] = {"langfuse_session_id": session_id}
 
     result = agent.invoke(
         {"messages": [("human", human_input)]},
@@ -320,6 +325,8 @@ def main() -> None:
     nodes_json = os.path.join(output_dir, "nodes_index.json")
 
     langfuse = _init_langfuse()
+    if langfuse is not None:
+        print(f"Langfuse session_id  : {session_id}")
 
     print(f"root_directory : {root_dir}")
     print(f"output_dir     : {output_dir}")
@@ -384,7 +391,9 @@ def main() -> None:
                 },
                 trace_context={"trace_id": trace_id},
             )
-            lf_handler = LangfuseCallbackHandler(trace_context={"trace_id": trace_id})
+            lf_handler = LangfuseCallbackHandler(
+                trace_context={"trace_id": trace_id}
+            )
         try:
             output = _run_package(
                 pkg,
