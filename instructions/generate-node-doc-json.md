@@ -14,9 +14,11 @@ A batch JSON array. Each element has:
 
 ## Step 1 — Read source files and identify nodes
 
-For each entry in the batch, read the files listed in `node_files` (as absolute paths constructed from `package_dir` + the relative path). The working directory for all file reads is the `package_dir` of the current batch entry.
+For each entry, read the files listed in `node_files` (as absolute paths constructed from `package_dir` + the relative path). The working directory for all file reads is the `package_dir` of the current entry.
 
 If those files alone do not provide enough information to fully document a node (e.g. the class body is in a separate `.cpp` implementation file, parameters are declared in a utility header, or entry point names are in `setup.py` / `CMakeLists.txt`), read the additional files needed. Limit supplementary reads to files that are directly referenced (e.g. `#include` directives, Python imports) or that have standard names in the package (`setup.py`, `CMakeLists.txt`, `package.xml`).
+
+Read markdown or rst documentation files for the package, including README in the main directory, as well as files found in the doc/ subdirectory, to get context useful in documenting nodes.
 
 Identify all nodes defined across the listed files. A single source file may define more than one node class.
 
