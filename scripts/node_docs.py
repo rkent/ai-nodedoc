@@ -46,7 +46,7 @@ _SCRIPT_DIR = Path(__file__).parent.resolve()
 _CWD = Path().resolve()
 _FIND_SCRIPT = _SCRIPT_DIR / "find_file_nodes.py"
 _BATCH_SCRIPT = _SCRIPT_DIR / "create_node_batches.py"
-_PROMPT_FILE = _CWD / "instructions" / "document-node-batch.prompt.md"
+_PROMPT_FILE = _CWD / "instructions" / "generate-node-doc-json.md"
 _SCHEMA_FILE = _CWD / "instructions" / "node-doc.schema.json"
 
 
@@ -108,15 +108,6 @@ def _load_prompt() -> str:
         "ai-instructions/node-doc.schema.json",
         str(_SCHEMA_FILE),
     )
-    # Remove the VS-Code-specific note about using `run_in_terminal` for file reads;
-    # in this standalone context the agent has direct file read access via tools.
-    vscode_note = (
-        "**IMPORTANT: To avoid permission dialog requests when reading files outside "
-        "the workspace, use terminal commands (e.g. `cat`, `grep`) via `run_in_terminal` "
-        "instead of file read tools. This prevents VS Code from requesting file access "
-        "permissions.**\n\n"
-    )
-    text = text.replace(vscode_note, "")
     return text
 
 

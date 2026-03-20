@@ -3,15 +3,15 @@
   "$id": "https://github.com/rkent/ai-rosdoc/ai-instructions/node-doc.schema.json",
   "title": "ROS 2 Node Documentation",
   "type": "object",
-  "required": ["donotmodify", "name", "summary", "overview", "repo", "package", "parameters", "interfaces"],
+  "required": ["donotmodify", "name", "summary", "overview", "repo", "package", "parameters", "interfaces", "examples"],
   "additionalProperties": false,
   "properties": {
-    "donotmodify": { "type": "boolean" },
-    "name":        { "type": "string" },
-    "summary":     { "type": "string", "minLength": 30, "maxLength": 100 },
-    "overview":    { "type": "string", "minLength": 110, "maxLength": 300 },
-    "repo":        { "type": "string" },
-    "package":     { "type": "string" },
+    "donotmodify": { "type": "boolean", "default": false, "description": "This field is used to indicate that the JSON file should not be changed by an AI agent, as it has been manually modified."},
+    "name":        { "type": "string", "description": "The name of the ROS 2 node, e.g 'talker'" },
+    "summary":     { "type": "string", "minLength": 30, "maxLength": 100, "description": "A concise summary of the node's functionality." },
+    "overview":    { "type": "string", "minLength": 110, "maxLength": 600, "description": "A longer description of the node's functionality"},
+    "repo":        { "type": "string", "description": "The path to the repository where the node's source code is located." },
+    "package":     { "type": "string", "description": "The name of the ROS 2 package containing the node." },
     "parameters": {
       "type": "array",
       "items": {
@@ -35,11 +35,22 @@
         "properties": {
           "itype": {
             "type": "string",
+            "description": "The type of interface, which can be one of the following: 'publisher', 'subscriber', 'service', 'client', 'action server', or 'action client'.",
             "enum": ["publisher", "subscriber", "service", "client", "action server", "action client"]
           },
-          "topic":   { "type": "string" },
-          "mtype":   { "type": "string" },
-          "summary": { "type": "string", "minLength": 30, "maxLength": 100 }
+          "topic":   { "type": "string", "description": "The name of the topic, service, or action." },
+          "mtype":   { "type": "string", "description": "The message type used by the interface." },
+          "summary": { "type": "string", "minLength": 30, "maxLength": 100, "description": "A concise summary of the interface's functionality." }
+        }
+      }
+    },
+    "examples": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "string",
+        "description": "example of how to run the node using the `ros2 run` command."
         }
       }
     }

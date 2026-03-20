@@ -35,4 +35,5 @@ venv/
 # rkent
 
 output*/
+test_repos*/
 

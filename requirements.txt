@@ -14,3 +14,6 @@ python-dotenv
 
 # Observability / tracing (optional – set LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY)
 langfuse>=2.0.0
+
+# Schema
+check-jsonschema
