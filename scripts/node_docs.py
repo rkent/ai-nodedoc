@@ -46,6 +46,7 @@ session_id = str(uuid.uuid4())
 _SCRIPT_DIR = Path(__file__).parent.resolve()
 _CWD = Path().resolve()
 _FIND_SCRIPT = _SCRIPT_DIR / "find_file_nodes.py"
+_MARKDOWN_SCRIPT = _SCRIPT_DIR / "markdown_from_json.py"
 _PROMPT_FILE = _CWD / "instructions" / "generate-node-doc-json.md"
 _SCHEMA_FILE = _CWD / "instructions" / "node-doc.schema.json"
 
@@ -408,6 +409,12 @@ def main() -> None:
             if lf_span is not None:
                 lf_span.update(output=output)
                 lf_span.end()
+            pkg_nodes_dir = os.path.join(output_dir, "Nodes", pkg_name)
+            if os.path.isdir(pkg_nodes_dir):
+                print(f"\n--- Generating markdown for {pkg_name} ---")
+                md_rc = _run_subprocess(_MARKDOWN_SCRIPT, [pkg_nodes_dir])
+                if md_rc != 0:
+                    print(f"Warning: markdown_from_json.py failed for {pkg_name} (exit {md_rc})", file=sys.stderr)
         except Exception as exc:
             msg = f"Package {i} ({pkg_name}) failed: {exc}"
             print(f"ERROR: {msg}", file=sys.stderr)
