@@ -51,7 +51,6 @@
       "items": {
         "type": "string",
         "description": "example of how to run the node using the `ros2 run` command."
-        }
       }
     }
   }

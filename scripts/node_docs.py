@@ -4,22 +4,17 @@ node_docs.py - AI-assisted ROS 2 node documentation generator
 
 Orchestrates the full pipeline:
   1. scripts/find_file_nodes.py   - identify ROS 2 packages with nodes
-  2. scripts/create_node_batches.py - split packages into LLM-sized batches
-  3. LangChain agent              - read source files, write .md + .json docs
+  2. LangChain agent              - read source files, write .json docs (per package)
 
 Usage:
     python3 node_docs.py <root_directory> [options]
 
 Options:
     --output-dir DIR     Directory under which Nodes/ is written (default: CWD)
-    --batch-dir DIR      Directory for intermediate batch JSON files
-                         (default: <output-dir>/tmp)
     --model MODEL        Model name (default: openrouter:minimax/minimax-m2.5)
     --max-packages N     Stop scanning after N packages with nodes
-    --max-per-batch N    Max node files per batch (default: 20)
-    --batch N            Only process batch number N (1-based); skip others
+    --package NAME       Only process the package named NAME; skip others
     --skip-scan          Skip scanning; reuse existing nodes_index.json
-    --skip-batch         Skip batch creation; reuse existing batch files
 
 Environment variables:
     ANTHROPIC_API_KEY    Required for Anthropic models
@@ -31,6 +26,7 @@ Environment variables:
 
 import argparse
 from dotenv import load_dotenv
+import json
 import os
 import subprocess
 import sys
@@ -45,7 +41,6 @@ load_dotenv()
 _SCRIPT_DIR = Path(__file__).parent.resolve()
 _CWD = Path().resolve()
 _FIND_SCRIPT = _SCRIPT_DIR / "find_file_nodes.py"
-_BATCH_SCRIPT = _SCRIPT_DIR / "create_node_batches.py"
 _PROMPT_FILE = _CWD / "instructions" / "generate-node-doc-json.md"
 _SCHEMA_FILE = _CWD / "instructions" / "node-doc.schema.json"
 
@@ -206,20 +201,19 @@ def _make_tools(working_dir: str):
     return [read_file, write_file, run_shell, list_dir]
 
 
-def _run_batch(
-    batch_file: str,
+def _run_package(
+    package: dict,
     prompt_text: str,
     llm,
     working_dir: str,
-    batch_index: int,
-    total_batches: int,
+    pkg_index: int,
+    total_packages: int,
     lf_handler=None,
 ) -> str:
-    """Run the LangChain documentation agent on one batch file."""
+    """Run the LangChain documentation agent on one package."""
     from langchain.agents import create_agent
 
-    with open(batch_file, "r", encoding="utf-8") as fh:
-        batch_data = fh.read()
+    pkg_data = json.dumps([package], indent=2)
 
     tools = _make_tools(working_dir)
 
@@ -232,9 +226,9 @@ def _run_batch(
     )
 
     human_input = (
-        f"Batch {batch_index} of {total_batches}.\n\n"
-        f"Here is the batch JSON to process:\n"
-        f"```json\n{batch_data}\n```"
+        f"Package {pkg_index} of {total_packages}: {package.get('package', '')}\n\n"
+        f"Here is the package JSON to process:\n"
+        f"```json\n{pkg_data}\n```"
     )
 
     invoke_config = {"recursion_limit": 400}
@@ -284,15 +278,6 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--batch-dir",
-        default=None,
-        metavar="DIR",
-        help=(
-            "Directory for intermediate batch JSON files "
-            "(default: <output-dir>/tmp)"
-        ),
-    )
-    parser.add_argument(
         "--model",
         default="openrouter:minimax/minimax-m2.5",
         metavar="MODEL",
@@ -306,18 +291,10 @@ def _parse_args() -> argparse.Namespace:
         help="Stop scanning after finding N packages with nodes",
     )
     parser.add_argument(
-        "--max-per-batch",
-        type=int,
-        default=20,
-        metavar="N",
-        help="Maximum number of node files per batch (default: 20)",
-    )
-    parser.add_argument(
-        "--batch",
-        type=int,
+        "--package",
         default=None,
-        metavar="N",
-        help="Process only batch number N (1-based); skip all others",
+        metavar="NAME",
+        help="Process only the package named NAME; skip all others",
     )
     parser.add_argument(
         "--skip-scan",
@@ -325,11 +302,6 @@ def _parse_args() -> argparse.Namespace:
         help=(
             "Skip scanning; reuse <output-dir>/nodes_index.json if it already exists"
         ),
-    )
-    parser.add_argument(
-        "--skip-batch",
-        action="store_true",
-        help="Skip batch creation; reuse batch files already in <batch-dir>",
     )
     return parser.parse_args()
 
@@ -346,20 +318,12 @@ def main() -> None:
     output_dir = os.path.abspath(args.output_dir) if args.output_dir else os.getcwd()
     os.makedirs(output_dir, exist_ok=True)
 
-    batch_dir = (
-        os.path.abspath(args.batch_dir)
-        if args.batch_dir
-        else os.path.join(output_dir, "tmp")
-    )
-    os.makedirs(batch_dir, exist_ok=True)
-
     nodes_json = os.path.join(output_dir, "nodes_index.json")
 
     langfuse = _init_langfuse()
 
     print(f"root_directory : {root_dir}")
     print(f"output_dir     : {output_dir}")
-    print(f"batch_dir      : {batch_dir}")
     print(f"model          : {args.model}")
 
     # -----------------------------------------------------------------------
@@ -377,57 +341,45 @@ def main() -> None:
             sys.exit(f"find_file_nodes.py failed (exit {rc})")
         print(f"  -> node index written to {nodes_json}")
 
-    # -----------------------------------------------------------------------
-    # Step 2: create_node_batches.py
-    # -----------------------------------------------------------------------
-    if args.skip_batch and any(
-        f.startswith("batch") and f.endswith(".json")
-        for f in os.listdir(batch_dir)
-    ):
-        print(f"\n=== Step 2: Skipping batch creation (reusing files in {batch_dir}) ===")
-    else:
-        print("\n=== Step 2: Creating batch files ===")
-        batch_args = [nodes_json, batch_dir, "--max", str(args.max_per_batch)]
-        rc = _run_subprocess(_BATCH_SCRIPT, batch_args)
-        if rc != 0:
-            sys.exit(f"create_node_batches.py failed (exit {rc})")
+    # Load packages directly from nodes_index.json
+    try:
+        with open(nodes_json, "r", encoding="utf-8") as fh:
+            packages = json.load(fh)
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        sys.exit(f"Error loading {nodes_json}: {exc}")
 
-    batch_files = sorted(
-        os.path.join(batch_dir, f)
-        for f in os.listdir(batch_dir)
-        if f.startswith("batch") and f.endswith(".json")
-    )
-    print(f"  -> {len(batch_files)} batch file(s) in {batch_dir}")
-
-    if not batch_files:
-        print("No batches to process. Exiting.")
+    if not packages:
+        print("No packages to process. Exiting.")
         return
 
+    print(f"  -> {len(packages)} package(s) to process")
+
     # -----------------------------------------------------------------------
-    # Step 3: LLM agent
+    # Step 2: LLM agent (one invocation per package)
     # -----------------------------------------------------------------------
-    print("\n=== Step 3: Running LLM agent to generate documentation ===")
+    print("\n=== Step 2: Running LLM agent to generate documentation ===")
     prompt_text = _load_prompt()
     llm = _get_llm(args.model)
 
     errors: list[str] = []
-    for i, batch_file in enumerate(batch_files, start=1):
-        if args.batch is not None and i != args.batch:
+    for i, pkg in enumerate(packages, start=1):
+        pkg_name = pkg.get("package", f"package_{i}")
+        if args.package is not None and pkg_name != args.package:
             continue
 
-        print(f"\n--- Batch {i}/{len(batch_files)}: {os.path.basename(batch_file)} ---")
+        print(f"\n--- Package {i}/{len(packages)}: {pkg_name} ---")
         lf_span = None
         lf_handler = None
         if langfuse is not None:
             from langfuse.langchain import CallbackHandler as LangfuseCallbackHandler  # noqa: PLC0415
             trace_id = langfuse.create_trace_id()
             lf_span = langfuse.start_observation(
-                name="node-doc-batch",
+                name="node-doc-package",
                 as_type="span",
                 metadata={
-                    "batch": i,
-                    "total": len(batch_files),
-                    "file": os.path.basename(batch_file),
+                    "package": pkg_name,
+                    "index": i,
+                    "total": len(packages),
                     "model": args.model,
                     "root_dir": root_dir,
                 },
@@ -435,13 +387,13 @@ def main() -> None:
             )
             lf_handler = LangfuseCallbackHandler(trace_context={"trace_id": trace_id})
         try:
-            output = _run_batch(
-                batch_file,
+            output = _run_package(
+                pkg,
                 prompt_text,
                 llm,
                 output_dir,
-                batch_index=i,
-                total_batches=len(batch_files),
+                pkg_index=i,
+                total_packages=len(packages),
                 lf_handler=lf_handler,
             )
             print(f"Agent result: {output}")
@@ -449,7 +401,7 @@ def main() -> None:
                 lf_span.update(output=output)
                 lf_span.end()
         except Exception as exc:
-            msg = f"Batch {i} ({os.path.basename(batch_file)}) failed: {exc}"
+            msg = f"Package {i} ({pkg_name}) failed: {exc}"
             print(f"ERROR: {msg}", file=sys.stderr)
             if lf_span is not None:
                 lf_span.update(output=str(exc))
@@ -461,7 +413,7 @@ def main() -> None:
 
     print("\n=== Documentation generation complete ===")
     if errors:
-        print(f"\n{len(errors)} batch(es) encountered errors:")
+        print(f"\n{len(errors)} package(s) encountered errors:")
         for err in errors:
             print(f"  - {err}")
         sys.exit(1)
