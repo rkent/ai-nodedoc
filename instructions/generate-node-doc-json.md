@@ -48,6 +48,6 @@ If validation fails, examine the errors, correct the JSON file, and re-validate.
 
 Your **entire** response must be exactly one line and nothing else:
 
-`BATCH_COMPLETE: X nodes documented in Y packages`
+`PACKAGE_COMPLETE: X nodes documented in package <package_name>`
 
 Do not include any other text, summaries, lists, confirmations, or explanations. Only that single line.

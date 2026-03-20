@@ -19,6 +19,7 @@ Options:
 Environment variables:
     ANTHROPIC_API_KEY    Required for Anthropic models
     OPENAI_API_KEY       Required for OpenAI models
+    OPENROUTER_API_KEY   Required for OpenRouter models
     LANGFUSE_PUBLIC_KEY  Enable Langfuse tracing (optional)
     LANGFUSE_SECRET_KEY  Enable Langfuse tracing (optional)
     LANGFUSE_HOST        Langfuse server URL (optional, default: cloud)
@@ -77,8 +78,6 @@ def _check_imports() -> None:
             f"Missing dependency: {exc}\n"
             "Install dependencies with:\n"
             "    pip install -r requirements.txt\n"
-            "or:\n"
-            "    pip install langchain langchain-core langchain-anthropic langchain-openai"
         )
 
 
@@ -93,7 +92,7 @@ def _strip_frontmatter(text: str) -> str:
 
 
 def _load_prompt() -> str:
-    """Load and return the document-node-batch prompt, stripped of frontmatter."""
+    """Load and return the prompt file, stripped of frontmatter."""
     with open(_PROMPT_FILE, "r", encoding="utf-8") as fh:
         raw = fh.read()
     text = _strip_frontmatter(raw)

@@ -29,12 +29,7 @@ ENV PYTHONUNBUFFERED=1
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-# Copy repository contents
 WORKDIR /app
-COPY . .
-
-# Make the main script executable
-RUN chmod +x scripts/node_docs.py
 
 USER $USERNAME
 
